@@ -1,0 +1,2 @@
+CREATE DATABASE IF NOT EXISTS ejercicio1;
+USE ejercicio1;
