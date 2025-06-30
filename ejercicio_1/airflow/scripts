@@ -1,1 +1,63 @@
+from airflow import DAG
+from airflow.operators.python import PythonOperator
+from airflow.operators.bash import BashOperator
+from datetime import datetime
+import pandas as pd
+import os
+
+def transformar_datos():
+    ruta = "/home/hadoop/aviacion_data"
+    os.makedirs(ruta, exist_ok=True)
+
+    url_2021 = "https://data-engineer-edvai-public.s3.amazonaws.com/2021-informe-ministerio.csv"
+    url_2022 = "https://data-engineer-edvai-public.s3.amazonaws.com/202206-informe-ministerio.csv"
+    url_aeropuertos = "https://data-engineer-edvai-public.s3.amazonaws.com/aeropuertos_detalle.csv"
+
+    df_2021 = pd.read_csv(url_2021, sep=';', low_memory=False)
+    df_2022 = pd.read_csv(url_2022, sep=';', low_memory=False)
+    df = pd.concat([df_2021, df_2022], ignore_index=True)
+
+    # Normalizar nombres de columnas
+    df.columns = [col.strip().lower().replace(' ', '_') for col in df.columns]
+
+    if 'clasificación_vuelo' not in df.columns:
+        print("🧾 Columnas cargadas:", list(df.columns))
+        raise ValueError("❌ La columna 'clasificación_vuelo' no existe en el CSV.")
+
+    df = df[df['clasificación_vuelo'] == 'Doméstico']
+    df.drop(columns=['calidad_dato'], errors='ignore', inplace=True)
+
+    # Limpiar y convertir la columna 'pasajeros'
+    df['pasajeros'] = df['pasajeros'].astype(str).str.replace(',', '.', regex=False)
+    df['pasajeros'] = pd.to_numeric(df['pasajeros'], errors='coerce').fillna(0).astype(int)
+
+    df.to_csv(f"{ruta}/vuelos_limpios.csv", index=False, header=False, sep=';')
+
+    df_a = pd.read_csv(url_aeropuertos, sep=';', low_memory=False)
+    df_a['distancia_ref'] = df_a['distancia_ref'].fillna(0)
+    df_a.to_csv(f"{ruta}/aeropuertos_limpios.csv", index=False, header=False, sep=';')
+
+    print("✅ Archivos exportados correctamente.")
+
+definir_dag = DAG(
+    dag_id='aviacion_ingest_hive',
+    description='Ingesta automática de datos de aviación a Hive',
+    start_date=datetime(2023, 1, 1),
+    schedule_interval=None,
+    catchup=False
+)
+
+limpiar_transformar_datos = PythonOperator(
+    task_id='limpiar_transformar_datos',
+    python_callable=transformar_datos,
+    dag=definir_dag
+)
+
+cargar_a_hive = BashOperator(
+    task_id='cargar_a_hive',
+    bash_command="/home/hadoop/hive/bin/hive -e \"LOAD DATA LOCAL INPATH '/home/hadoop/aviacion_data/vuelos_limpios.csv' OVERWRITE INTO TABLE vuelos_2021_2022; LOAD DATA LOCAL INPATH '/home/hadoop/aviacion_data/aeropuertos_limpios.csv' OVERWRITE INTO TABLE aeropuertos_detalles;\"",
+    dag=definir_dag
+)
+
+limpiar_transformar_datos >> cargar_a_hive
 
