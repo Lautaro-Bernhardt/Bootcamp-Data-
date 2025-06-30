@@ -1,0 +1,38 @@
+from pyspark.sql import SparkSession
+from pyspark.sql.functions import col, when
+
+spark = SparkSession.builder.appName("TransformarDatosAviacion").getOrCreate()
+
+# Paths HDFS
+raw_path = "hdfs:///proyectos/aviacion/raw/"
+clean_path = "hdfs:///proyectos/aviacion/clean/"
+
+# Ingestar archivos
+df_2021 = spark.read.option("header", True).option("sep", ";").csv(raw_path + "2021-informe-ministerio.csv")
+df_2022 = spark.read.option("header", True).option("sep", ";").csv(raw_path + "202206-informe-ministerio.csv")
+df_vuelos = df_2021.unionByName(df_2022)
+
+# Normalizar columnas
+for colname in df_vuelos.columns:
+    df_vuelos = df_vuelos.withColumnRenamed(colname, colname.strip().lower().replace(" ", "_"))
+
+# Filtrar vuelos domésticos
+df_vuelos = df_vuelos.filter(col("clasificación_vuelo") == "Doméstico")
+
+# Limpiar campos
+df_vuelos = df_vuelos.drop("calidad_dato")
+df_vuelos = df_vuelos.withColumn("pasajeros", when(col("pasajeros").isNull(), 0).otherwise(col("pasajeros")))
+df_vuelos = df_vuelos.withColumn("pasajeros", col("pasajeros").cast("double"))
+
+# Guardar limpio
+df_vuelos.write.mode("overwrite").option("sep", ";").csv(clean_path + "vuelos_limpios")
+
+# Aeropuertos
+df_aero = spark.read.option("header", True).option("sep", ";").csv(raw_path + "aeropuertos_detalle.csv")
+df_aero = df_aero.drop("inhab", "fir")
+df_aero = df_aero.withColumn("distancia_ref", when(col("distancia_ref").isNull(), 0).otherwise(col("distancia_ref")))
+
+# Guardar limpio
+df_aero.write.mode("overwrite").option("sep", ";").csv(clean_path + "aeropuertos_limpios")
+
+print("✅ Transformación finalizada.")
