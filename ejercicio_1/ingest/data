@@ -1,0 +1,8 @@
+wget https://data-engineer-edvai-public.s3.amazonaws.com/2021-informe-ministerio.csv
+wget https://data-engineer-edvai-public.s3.amazonaws.com/202206-informe-ministerio.csv
+wget https://data-engineer-edvai-public.s3.amazonaws.com/aeropuertos_detalle.csv
+
+hdfs dfs -mkdir -p /data/vuelos
+hdfs dfs -put 2021-informe-ministerio.csv /data/vuelos/
+hdfs dfs -put 202206-informe-ministerio.csv /data/vuelos/
+hdfs dfs -put aeropuertos_detalle.csv /data/vuelos/
