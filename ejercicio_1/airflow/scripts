@@ -35,6 +35,10 @@ def transformar_datos():
 
     df_a = pd.read_csv(url_aeropuertos, sep=';', low_memory=False)
     df_a['distancia_ref'] = df_a['distancia_ref'].fillna(0)
+
+    # Eliminar columnas innecesarias
+    df_a.drop(columns=['inhab', 'fir'], errors='ignore', inplace=True)
+
     df_a.to_csv(f"{ruta}/aeropuertos_limpios.csv", index=False, header=False, sep=';')
 
     print("✅ Archivos exportados correctamente.")
@@ -60,4 +64,5 @@ cargar_a_hive = BashOperator(
 )
 
 limpiar_transformar_datos >> cargar_a_hive
+
 
